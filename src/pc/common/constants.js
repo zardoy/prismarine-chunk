@@ -35,6 +35,10 @@ const MAX_BITS_PER_BIOME = 3
 
 const GLOBAL_BITS_PER_BIOME = 6
 
+// 2048
+// blocks / bytes per block
+const BYTES_PER_LIGHT_SECTION = 16 * 16 * 16 / (8 / 4)
+
 module.exports = {
   CHUNK_HEIGHT,
   CHUNK_WIDTH,
@@ -48,5 +52,6 @@ module.exports = {
   BIOME_SECTION_VOLUME,
   MIN_BITS_PER_BIOME,
   MAX_BITS_PER_BIOME,
-  GLOBAL_BITS_PER_BIOME
+  GLOBAL_BITS_PER_BIOME,
+  BYTES_PER_LIGHT_SECTION
 }
