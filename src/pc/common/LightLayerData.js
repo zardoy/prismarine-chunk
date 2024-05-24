@@ -2,7 +2,10 @@ const { BYTES_PER_LIGHT_SECTION } = require('./constants')
 
 class LightLayerData {
   constructor (options) {
-    if (options !== null && options.data) {
+    if (options === null) {
+      throw Error('Null options provided!')
+    }
+    if (options.data) {
       if (options.data.length !== BYTES_PER_LIGHT_SECTION) {
         throw Error('Data of wrong length: ' + options.data.length)
       }
@@ -31,7 +34,7 @@ class LightLayerData {
     }
   }
 
-  getDataOrAllocate() {
+  getDataOrAllocate () {
     if (this.data == null) {
       this.data = new Int8Array(BYTES_PER_LIGHT_SECTION)
       if (this.defaultValue !== 0) {
