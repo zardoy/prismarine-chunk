@@ -15,8 +15,13 @@ class CommonChunkColumn {
   }
 
   getSectionAtIndex (index) {
-    const minY = this.minY >> 4
-    return this.sections[index - minY]
+    const minSection = this.minY >> 4
+    return this.sections[index - minSection]
+  }
+
+  getSectionYFromSectionIndex (index) {
+    const minSection = this.minY >> 4
+    return index + minSection
   }
 
   // Biomes

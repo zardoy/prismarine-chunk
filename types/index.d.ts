@@ -55,6 +55,7 @@ declare class PCChunk extends CommonChunk {
   getSection(pos: Vec3): Section
   // Returns chunk at a Y index, adjusted for chunks at negative-Y
   getSectionAtIndex(chunkY: number): SubChunk
+  getSectionYFromSectionIndex(index: number): number
 }
 
 //// Bedrock ////
