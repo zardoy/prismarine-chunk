@@ -168,6 +168,11 @@ class CommonChunkColumn {
     return this.sections[this.co + y]
   }
 
+  getSectionYFromSectionIndex (index) {
+    const minSection = this.minY >> 4
+    return index + minSection
+  }
+
   setSection (y, section) {
     this.sections[this.co + y] = section
   }

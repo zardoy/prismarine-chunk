@@ -204,6 +204,7 @@ declare class BedrockChunk extends CommonChunk {
   getSection(pos): SubChunk
   // Returns chunk at a Y index, adjusted for chunks at negative-Y
   getSectionAtIndex(chunkY: number): SubChunk
+  getSectionYFromSectionIndex(index: number): number
   // Creates a new air section
   newSection(y: number): SubChunk
   // Creates a new section with the given blocks
