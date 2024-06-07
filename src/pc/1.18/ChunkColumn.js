@@ -252,33 +252,35 @@ module.exports = (Block, mcData) => {
     }
 
     loadParsedLight (skyLight, blockLight, skyLightMask, blockLightMask, emptySkyLightMask, emptyBlockLightMask) {
-      function readSection (sections, data, lightMask, pLightMask, emptyMask, pEmptyMask) {
+      function readSectionList (sections, currentLightMask, currentEmptyMask, packetLightMask, packetEmptyMask, data) {
         let currentSectionIndex = 0
-        const incomingLightMask = BitArray.fromLongArray(pLightMask, 1)
-        const incomingEmptyMask = BitArray.fromLongArray(pEmptyMask, 1)
+        const incomingLightMask = BitArray.fromLongArray(packetLightMask, 1)
+        const incomingEmptyMask = BitArray.fromLongArray(packetEmptyMask, 1)
 
         for (let y = 0; y < sections.length; y++) {
-          const isEmpty = incomingEmptyMask.get(y)
-          if (!incomingLightMask.get(y) && !isEmpty) { continue }
+          const inLightMask = incomingLightMask.get(y)
+          const inEmptyMask = incomingEmptyMask.get(y)
+          if (!inLightMask && !inEmptyMask) continue
 
-          emptyMask.set(y, isEmpty)
-          lightMask.set(y, 1 - isEmpty)
+          currentEmptyMask.set(y, inEmptyMask)
+          currentLightMask.set(y, 1 - inEmptyMask)
 
+          // buffer size: 2048
           const bitArray = new BitArray({
             bitsPerValue: 4,
             capacity: 4096
           })
           sections[y] = bitArray
 
-          if (!isEmpty) {
+          if (inLightMask) {
             const sectionReader = Buffer.from(data[currentSectionIndex++])
             bitArray.readBuffer(SmartBuffer.fromBuffer(sectionReader))
           }
         }
       }
 
-      readSection(this.skyLightSections, skyLight, this.skyLightMask, skyLightMask, this.emptySkyLightMask, emptySkyLightMask)
-      readSection(this.blockLightSections, blockLight, this.blockLightMask, blockLightMask, this.emptyBlockLightMask, emptyBlockLightMask)
+      readSectionList(this.skyLightSections, this.skyLightMask, this.emptySkyLightMask, skyLightMask, emptySkyLightMask, skyLight)
+      readSectionList(this.blockLightSections, this.blockLightMask, this.emptyBlockLightMask, blockLightMask, emptyBlockLightMask, blockLight)
     }
 
     _loadBlockLightNibbles (y, buffer) {
