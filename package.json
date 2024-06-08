@@ -37,8 +37,11 @@
   "devDependencies": {
     "@types/node": "^20.2.1",
     "expect": "^29.1.0",
+    "minecraft-wrap": "^1.5.1",
+    "mineflayer": "^4.20.1",
     "mocha": "^10.0.0",
     "prismarine-chunk": "file:.",
+    "prismarine-provider-anvil": "github:zardoy/prismarine-provider-anvil#everything",
     "standard": "^17.0.0-2",
     "typescript": "^5.0.4"
   },
