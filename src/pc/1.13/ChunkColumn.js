@@ -105,13 +105,23 @@ module.exports = (Block, mcData) => {
     }
 
     getBlockLight (pos) {
-      const section = this.sections[pos.y >> 4]
-      return section ? section.getBlockLight(toSectionPos(pos)) : 15
+      const section = this.sections[pos.y >> 4];
+      if (!section) return 15;
+      
+      // Convert world position to section position
+      const sectionPos = toSectionPos(pos);
+      // Get the light value using the section's method
+      return section.getBlockLight(sectionPos);
     }
 
     getSkyLight (pos) {
-      const section = this.sections[pos.y >> 4]
-      return section ? section.getSkyLight(toSectionPos(pos)) : 15
+      const section = this.sections[pos.y >> 4];
+      if (!section) return 15;
+
+      // Convert world position to section position
+      const sectionPos = toSectionPos(pos);
+      // Get the light value using the section's method
+      return section.getSkyLight(sectionPos);
     }
 
     getBiome (pos) {
@@ -248,16 +258,91 @@ module.exports = (Block, mcData) => {
           capacity: 4096
         }).readBuffer(reader, varInt.read(reader) * 2)
 
+        // For light data, we need to manually map from the read data to the correct C++ indices
+        // Create light data BitArrays
         const blockLight = new BitArray({
           bitsPerValue: 4,
           capacity: 4096
-        }).readBuffer(reader)
-
+        });
+        
+        // Read the raw data but DON'T process it yet
+        const blockLightRaw = new Uint8Array(2048); // 4096 blocks / 2 blocks per byte
+        for (let i = 0; i < 2048; i++) {
+          blockLightRaw[i] = reader.readUInt8();
+        }
+        
+        // Process the light data correctly
+        for (let i = 0; i < 2048; i++) {
+          const byte = blockLightRaw[i];
+          const blockIndex1 = i * 2;
+          const blockIndex2 = i * 2 + 1;
+          
+          // Extract the two 4-bit values from the byte
+          const value1 = byte & 0x0F;
+          const value2 = (byte >> 4) & 0x0F;
+          
+          // Calculate C++ style coordinates for these blocks
+          const x1 = blockIndex1 % 16;
+          const z1 = Math.floor((blockIndex1 / 16) % 16);
+          const y1 = Math.floor(blockIndex1 / 256);
+          
+          const x2 = blockIndex2 % 16;
+          const z2 = Math.floor((blockIndex2 / 16) % 16);
+          const y2 = Math.floor(blockIndex2 / 256);
+          
+          // Calculate C++ style indices
+          const index1 = (y1 * 16 * 16) + (z1 * 16) + x1;
+          const index2 = (y2 * 16 * 16) + (z2 * 16) + x2;
+          
+          // Set the values using C++ style indices
+          blockLight.set(index1, value1);
+          if (blockIndex2 < 4096) { // Make sure we don't go out of bounds
+            blockLight.set(index2, value2);
+          }
+        }
+      
+        // Similarly for sky light
         if (skyLightSent) {
           skyLight = new BitArray({
             bitsPerValue: 4,
             capacity: 4096
-          }).readBuffer(reader)
+          });
+          
+          // Read raw data
+          const skyLightRaw = new Uint8Array(2048);
+          for (let i = 0; i < 2048; i++) {
+            skyLightRaw[i] = reader.readUInt8();
+          }
+          
+          // Process the data correctly
+          for (let i = 0; i < 2048; i++) {
+            const byte = skyLightRaw[i];
+            const blockIndex1 = i * 2;
+            const blockIndex2 = i * 2 + 1;
+            
+            // Extract the two 4-bit values from the byte
+            const value1 = byte & 0x0F;
+            const value2 = (byte >> 4) & 0x0F;
+            
+            // Calculate C++ style coordinates for these blocks
+            const x1 = blockIndex1 % 16;
+            const z1 = Math.floor((blockIndex1 / 16) % 16);
+            const y1 = Math.floor(blockIndex1 / 256);
+            
+            const x2 = blockIndex2 % 16;
+            const z2 = Math.floor((blockIndex2 / 16) % 16);
+            const y2 = Math.floor(blockIndex2 / 256);
+            
+            // Calculate C++ style indices
+            const index1 = (y1 * 16 * 16) + (z1 * 16) + x1;
+            const index2 = (y2 * 16 * 16) + (z2 * 16) + x2;
+            
+            // Set the values using C++ style indices
+            skyLight.set(index1, value1);
+            if (blockIndex2 < 4096) { // Make sure we don't go out of bounds
+              skyLight.set(index2, value2);
+            }
+          }
         }
 
         const section = new ChunkSection({

@@ -116,13 +116,31 @@ module.exports = (Block, mcData) => {
     }
 
     getBlockLight (pos) {
-      const section = this.blockLightSections[getLightSectionIndex(pos)]
-      return section ? section.get(getSectionBlockIndex(pos)) : 0
+      const section = this.blockLightSections[getLightSectionIndex(pos)];
+      if (!section) return 0;
+
+      // Calculate index using C++ approach
+      const localY = pos.y % 16;
+      const index = (localY * 16 * 16) + (pos.z * 16) + pos.x;
+
+      // Get the light value using the section's BitArray
+      return section.get(index);
     }
 
+    /**
+     * Get skylight value at specific coordinates within a chunk
+     * Matching C++ implementation index calculation
+     */
     getSkyLight (pos) {
-      const section = this.skyLightSections[getLightSectionIndex(pos)]
-      return section ? section.get(getSectionBlockIndex(pos)) : 0
+      const section = this.skyLightSections[getLightSectionIndex(pos)];
+      if (!section) return 0;
+
+      // Calculate index using C++ approach
+      const localY = pos.y % 16;
+      const index = (localY * 16 * 16) + (pos.z * 16) + pos.x;
+
+      // Get the light value using the section's BitArray
+      return section.get(index);
     }
 
     getBiome (pos) {
@@ -163,41 +181,49 @@ module.exports = (Block, mcData) => {
     }
 
     setBlockLight (pos, light) {
-      const sectionIndex = getLightSectionIndex(pos)
-      let section = this.blockLightSections[sectionIndex]
+      const sectionIndex = getLightSectionIndex(pos);
+      let section = this.blockLightSections[sectionIndex];
 
       if (section === null) {
         if (light === 0) {
-          return
+          return;
         }
         section = new BitArray({
           bitsPerValue: 4,
           capacity: 4096
-        })
-        this.blockLightMask |= 1 << sectionIndex
-        this.blockLightSections[sectionIndex] = section
+        });
+        this.blockLightMask |= 1 << sectionIndex;
+        this.blockLightSections[sectionIndex] = section;
       }
 
-      section.set(getSectionBlockIndex(pos), light)
+      // Calculate index using C++ approach
+      const localY = pos.y % 16;
+      const index = (localY * 16 * 16) + (pos.z * 16) + pos.x;
+
+      section.set(index, light);
     }
 
     setSkyLight (pos, light) {
-      const sectionIndex = getLightSectionIndex(pos)
-      let section = this.skyLightSections[sectionIndex]
+      const sectionIndex = getLightSectionIndex(pos);
+      let section = this.skyLightSections[sectionIndex];
 
       if (section === null) {
         if (light === 0) {
-          return
+          return;
         }
         section = new BitArray({
           bitsPerValue: 4,
           capacity: 4096
-        })
-        this.skyLightMask |= 1 << sectionIndex
-        this.skyLightSections[sectionIndex] = section
+        });
+        this.skyLightMask |= 1 << sectionIndex;
+        this.skyLightSections[sectionIndex] = section;
       }
 
-      section.set(getSectionBlockIndex(pos), light)
+      // Calculate index using C++ approach
+      const localY = pos.y % 16;
+      const index = (localY * 16 * 16) + (pos.z * 16) + pos.x;
+
+      section.set(index, light);
     }
 
     setBiome (pos, biome) {
@@ -291,32 +317,114 @@ module.exports = (Block, mcData) => {
     }
 
     loadLight (data, skyLightMask, blockLightMask, emptySkyLightMask = 0, emptyBlockLightMask = 0) {
-      const reader = SmartBuffer.fromBuffer(data)
+      const reader = SmartBuffer.fromBuffer(data);
 
       // Read sky light
-      this.skyLightMask |= skyLightMask
+      this.skyLightMask |= skyLightMask;
       for (let y = 0; y < constants.NUM_SECTIONS + 2; y++) {
         if (!((skyLightMask >> y) & 1)) {
-          continue
+          continue;
         }
-        varInt.read(reader) // always 2048
-        this.skyLightSections[y] = new BitArray({
+
+        const length = varInt.read(reader); // always 2048
+
+        // Create a BitArray for the section
+        const section = new BitArray({
           bitsPerValue: 4,
           capacity: 4096
-        }).readBuffer(reader)
+        });
+
+        // Read raw data into a temporary buffer instead of using readBuffer
+        const tempBuffer = new Uint8Array(length);
+        for (let i = 0; i < length; i++) {
+          tempBuffer[i] = reader.readUInt8();
+        }
+
+        // Manually map the data using C++ style indices
+        for (let i = 0; i < length; i++) {
+          const byte = tempBuffer[i];
+          const blockIndex1 = i * 2;
+          const blockIndex2 = i * 2 + 1;
+
+          // Get values from the byte
+          const value1 = byte & 0x0F;
+          const value2 = (byte >> 4) & 0x0F;
+
+          // Calculate C++ style indices
+          const x1 = blockIndex1 % 16;
+          const z1 = Math.floor(blockIndex1 / 16) % 16;
+          const y1 = Math.floor(blockIndex1 / 256);
+
+          const x2 = blockIndex2 % 16;
+          const z2 = Math.floor(blockIndex2 / 16) % 16;
+          const y2 = Math.floor(blockIndex2 / 256);
+
+          // Calculate final indices the way C++ does
+          const index1 = (y1 * 16 * 16) + (z1 * 16) + x1;
+          const index2 = (y2 * 16 * 16) + (z2 * 16) + x2;
+
+          // Set values in the BitArray
+          section.set(index1, value1);
+          if (blockIndex2 < 4096) { // Ensure we're within bounds
+            section.set(index2, value2);
+          }
+        }
+
+        this.skyLightSections[y] = section;
       }
 
-      // Read block light
-      this.blockLightMask |= blockLightMask
+      // Read block light (same approach as sky light)
+      this.blockLightMask |= blockLightMask;
       for (let y = 0; y < constants.NUM_SECTIONS + 2; y++) {
         if (!((blockLightMask >> y) & 1)) {
-          continue
+          continue;
         }
-        varInt.read(reader) // always 2048
-        this.blockLightSections[y] = new BitArray({
+
+        const length = varInt.read(reader); // always 2048
+
+        // Create a BitArray for the section
+        const section = new BitArray({
           bitsPerValue: 4,
           capacity: 4096
-        }).readBuffer(reader)
+        });
+
+        // Read raw data into a temporary buffer instead of using readBuffer
+        const tempBuffer = new Uint8Array(length);
+        for (let i = 0; i < length; i++) {
+          tempBuffer[i] = reader.readUInt8();
+        }
+
+        // Manually map the data using C++ style indices
+        for (let i = 0; i < length; i++) {
+          const byte = tempBuffer[i];
+          const blockIndex1 = i * 2;
+          const blockIndex2 = i * 2 + 1;
+
+          // Get values from the byte
+          const value1 = byte & 0x0F;
+          const value2 = (byte >> 4) & 0x0F;
+
+          // Calculate C++ style indices
+          const x1 = blockIndex1 % 16;
+          const z1 = Math.floor(blockIndex1 / 16) % 16;
+          const y1 = Math.floor(blockIndex1 / 256);
+
+          const x2 = blockIndex2 % 16;
+          const z2 = Math.floor(blockIndex2 / 16) % 16;
+          const y2 = Math.floor(blockIndex2 / 256);
+
+          // Calculate final indices the way C++ does
+          const index1 = (y1 * 16 * 16) + (z1 * 16) + x1;
+          const index2 = (y2 * 16 * 16) + (z2 * 16) + x2;
+
+          // Set values in the BitArray
+          section.set(index1, value1);
+          if (blockIndex2 < 4096) { // Ensure we're within bounds
+            section.set(index2, value2);
+          }
+        }
+
+        this.blockLightSections[y] = section;
       }
     }
 

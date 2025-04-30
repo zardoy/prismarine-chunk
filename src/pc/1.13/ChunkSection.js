@@ -5,7 +5,7 @@ const varInt = require('../common/varInt')
 const GLOBAL_BITS_PER_BLOCK = 13
 
 function getBlockIndex (pos) {
-  return (pos.y << 8) | (pos.z << 4) | pos.x
+  return (pos.y * 16 * 16) + (pos.z * 16) + pos.x
 }
 
 class ChunkSection {

@@ -153,14 +153,36 @@ module.exports = (Block, mcData) => {
       return section ? section.get(toSectionPos(pos, this.minY)) : 0
     }
 
-    getBlockLight (pos) {
-      const section = this.blockLightSections[getLightSectionIndex(pos, this.minY)]
-      return section ? section.get(getSectionBlockIndex(pos, this.minY)) : 0
+    getBlockLight(pos) {
+      // Get section using the existing method
+      const section = this.blockLightSections[getLightSectionIndex(pos, this.minY)];
+      if (!section) return 0;
+      
+      // Calculate index using C++ approach
+      const localY = (pos.y - this.minY) % 16;
+      const index = (localY * 16 * 16) + (pos.z * 16) + pos.x;
+      
+      // Get the light value using the section's BitArray
+      // In C++: return (section[index] >> 4) & 0x0F
+      return section.get(index);
     }
-
-    getSkyLight (pos) {
-      const section = this.skyLightSections[getLightSectionIndex(pos, this.minY)]
-      return section ? section.get(getSectionBlockIndex(pos, this.minY)) : 0
+    
+    /**
+     * Get skylight value at specific coordinates within a chunk
+     * Matching C++ implementation index calculation
+     */
+    getSkyLight(pos) {
+      // Get section using the existing method  
+      const section = this.skyLightSections[getLightSectionIndex(pos, this.minY)];
+      if (!section) return 0;
+      
+      // Calculate index using C++ approach
+      const localY = (pos.y - this.minY) % 16;
+      const index = (localY * 16 * 16) + (pos.z * 16) + pos.x;
+      
+      // Get the light value using the section's BitArray
+      // In C++: return section[index] & 0x0F
+      return section.get(index);
     }
 
     getBiome (pos) {
@@ -258,56 +280,150 @@ module.exports = (Block, mcData) => {
       }
     }
 
-    loadParsedLight (skyLight, blockLight, skyLightMask, blockLightMask, emptySkyLightMask, emptyBlockLightMask) {
-      function readSection (sections, data, lightMask, pLightMask, emptyMask, pEmptyMask) {
-        let currentSectionIndex = 0
-        const incomingLightMask = BitArray.fromLongArray(pLightMask, 1)
-        const incomingEmptyMask = BitArray.fromLongArray(pEmptyMask, 1)
-
+    loadParsedLight(skyLight, blockLight, skyLightMask, blockLightMask, emptySkyLightMask, emptyBlockLightMask) {
+      function readSection(sections, data, lightMask, pLightMask, emptyMask, pEmptyMask) {
+        let currentSectionIndex = 0;
+        const incomingLightMask = BitArray.fromLongArray(pLightMask, 1);
+        const incomingEmptyMask = BitArray.fromLongArray(pEmptyMask, 1);
+    
         for (let y = 0; y < sections.length; y++) {
-          const isEmpty = incomingEmptyMask.get(y)
+          const isEmpty = incomingEmptyMask.get(y);
           if (!incomingLightMask.get(y) && !isEmpty) { continue }
-
-          emptyMask.set(y, isEmpty)
-          lightMask.set(y, 1 - isEmpty)
-
+    
+          emptyMask.set(y, isEmpty);
+          lightMask.set(y, 1 - isEmpty);
+    
           const bitArray = new BitArray({
             bitsPerValue: 4,
             capacity: 4096
-          })
-          sections[y] = bitArray
-
+          });
+          sections[y] = bitArray;
+    
           if (!isEmpty) {
-            const sectionReader = Buffer.from(data[currentSectionIndex++])
-            bitArray.readBuffer(SmartBuffer.fromBuffer(sectionReader))
+            const sectionData = data[currentSectionIndex++];
+            
+            // Instead of using readBuffer, manually set the values with the correct indexing
+            for (let i = 0; i < sectionData.length; i++) {
+              const byte = sectionData[i];
+              const blockIndex1 = i * 2;
+              const blockIndex2 = i * 2 + 1;
+              
+              // Set two blocks per byte (4 bits per block)
+              const value1 = byte & 0x0F;
+              const value2 = (byte >> 4) & 0x0F;
+              
+              // Calculate C++ style indices for these blocks
+              const x1 = blockIndex1 % 16;
+              const z1 = Math.floor(blockIndex1 / 16) % 16;
+              const y1 = Math.floor(blockIndex1 / 256);
+              
+              const x2 = blockIndex2 % 16;
+              const z2 = Math.floor(blockIndex2 / 16) % 16;
+              const y2 = Math.floor(blockIndex2 / 256);
+              
+              // Calculate final indices the way C++ does
+              const index1 = (y1 * 16 * 16) + (z1 * 16) + x1;
+              const index2 = (y2 * 16 * 16) + (z2 * 16) + x2;
+              
+              // Set the light values
+              bitArray.set(index1, value1);
+              if (blockIndex2 < 4096) { // Make sure we don't go out of bounds
+                bitArray.set(index2, value2);
+              }
+            }
           }
         }
       }
-
-      readSection(this.skyLightSections, skyLight, this.skyLightMask, skyLightMask, this.emptySkyLightMask, emptySkyLightMask)
-      readSection(this.blockLightSections, blockLight, this.blockLightMask, blockLightMask, this.emptyBlockLightMask, emptyBlockLightMask)
+    
+      readSection(this.skyLightSections, skyLight, this.skyLightMask, skyLightMask, this.emptySkyLightMask, emptySkyLightMask);
+      readSection(this.blockLightSections, blockLight, this.blockLightMask, blockLightMask, this.emptyBlockLightMask, emptyBlockLightMask);
     }
-
-    _loadBlockLightNibbles (y, buffer) {
-      if (buffer.length !== 2048) throw new Error('Invalid light nibble buffer length ' + buffer.length)
-      const minCY = Math.abs(this.minY >> 4) + 1 // minCY + 1 extra layer below
-      this.blockLightMask.set(y + minCY, 1)
-      this.blockLightSections[y + minCY] = new BitArray({
+    
+    // Also update _loadBlockLightNibbles and _loadSkyLightNibbles with similar index conversion
+    _loadBlockLightNibbles(y, buffer) {
+      if (buffer.length !== 2048) throw new Error('Invalid light nibble buffer length ' + buffer.length);
+      const minCY = Math.abs(this.minY >> 4) + 1; // minCY + 1 extra layer below
+      this.blockLightMask.set(y + minCY, 1);
+      
+      const bitArray = new BitArray({
         bitsPerValue: 4,
-        capacity: 4096,
-        data: new Int8Array(buffer).buffer
-      })
+        capacity: 4096
+      });
+      
+      // Manual conversion of buffer to C++ style indices
+      for (let i = 0; i < buffer.length; i++) {
+        const byte = buffer[i];
+        const blockIndex1 = i * 2;
+        const blockIndex2 = i * 2 + 1;
+        
+        // Set two blocks per byte (4 bits per block)
+        const value1 = byte & 0x0F;
+        const value2 = (byte >> 4) & 0x0F;
+        
+        // Calculate C++ style indices for these blocks
+        const x1 = blockIndex1 % 16;
+        const z1 = Math.floor(blockIndex1 / 16) % 16;
+        const y1 = Math.floor(blockIndex1 / 256);
+        
+        const x2 = blockIndex2 % 16;
+        const z2 = Math.floor(blockIndex2 / 16) % 16;
+        const y2 = Math.floor(blockIndex2 / 256);
+        
+        // Calculate final indices the way C++ does
+        const index1 = (y1 * 16 * 16) + (z1 * 16) + x1;
+        const index2 = (y2 * 16 * 16) + (z2 * 16) + x2;
+        
+        // Set the light values
+        bitArray.set(index1, value1);
+        if (blockIndex2 < 4096) { // Make sure we don't go out of bounds
+          bitArray.set(index2, value2);
+        }
+      }
+      
+      this.blockLightSections[y + minCY] = bitArray;
     }
-
-    _loadSkyLightNibbles (y, buffer) {
-      if (buffer.length !== 2048) throw new Error('Invalid light nibble buffer length: ' + buffer.length)
-      const minCY = Math.abs(this.minY >> 4) + 1 // minCY + 1 extra layer below
-      this.skyLightMask.set(y + minCY, 1)
-      this.skyLightSections[y + minCY] = new BitArray({
+    
+    _loadSkyLightNibbles(y, buffer) {
+      if (buffer.length !== 2048) throw new Error('Invalid light nibble buffer length: ' + buffer.length);
+      const minCY = Math.abs(this.minY >> 4) + 1; // minCY + 1 extra layer below
+      this.skyLightMask.set(y + minCY, 1);
+      
+      const bitArray = new BitArray({
         bitsPerValue: 4,
-        capacity: 4096,
-        data: new Int8Array(buffer).buffer
-      })
+        capacity: 4096
+      });
+      
+      // Manual conversion of buffer to C++ style indices
+      for (let i = 0; i < buffer.length; i++) {
+        const byte = buffer[i];
+        const blockIndex1 = i * 2;
+        const blockIndex2 = i * 2 + 1;
+        
+        // Set two blocks per byte (4 bits per block)
+        const value1 = byte & 0x0F;
+        const value2 = (byte >> 4) & 0x0F;
+        
+        // Calculate C++ style indices for these blocks
+        const x1 = blockIndex1 % 16;
+        const z1 = Math.floor(blockIndex1 / 16) % 16;
+        const y1 = Math.floor(blockIndex1 / 256);
+        
+        const x2 = blockIndex2 % 16;
+        const z2 = Math.floor(blockIndex2 / 16) % 16;
+        const y2 = Math.floor(blockIndex2 / 256);
+        
+        // Calculate final indices the way C++ does
+        const index1 = (y1 * 16 * 16) + (z1 * 16) + x1;
+        const index2 = (y2 * 16 * 16) + (z2 * 16) + x2;
+        
+        // Set the light values
+        bitArray.set(index1, value1);
+        if (blockIndex2 < 4096) { // Make sure we don't go out of bounds
+          bitArray.set(index2, value2);
+        }
+      }
+      
+      this.skyLightSections[y + minCY] = bitArray;
     }
 
     // Loads an disk serialized chunk
