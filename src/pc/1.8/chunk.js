@@ -163,6 +163,26 @@ module.exports = (registry) => {
 
     }
 
+    /**
+     * New serializable light data dump method with consistent interface across versions
+     * Returns an object that can be easily transferred between threads
+     * @returns {Object} Object containing serialized light data
+     */
+    dumpLightNew () {
+      return {
+        sections: this.sections.map(section => section.toJson())
+      }
+    }
+
+    /**
+     * New light data loading method with consistent interface across versions
+     * Accepts a single argument that contains all necessary light data
+     * @param {Object} lightData - Object containing serialized light data
+     */
+    loadLightNew (lightData) {
+      this.sections = lightData.sections.map(s => Section.fromJson(s))
+    }
+
     loadBiomes () {
 
     }

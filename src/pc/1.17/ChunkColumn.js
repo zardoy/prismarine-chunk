@@ -425,6 +425,40 @@ module.exports = (Block, mcData) => {
         emptyBlockLightMask: this.emptyBlockLightMask.toLongArray()
       }
     }
+
+    /**
+     * New serializable light data dump method with consistent interface across versions
+     * Returns an object that can be easily transferred between threads
+     * @returns {Object} Object containing serialized light data
+     */
+    dumpLightNew () {
+      return {
+        skyLightMask: this.skyLightMask.toLongArray(),
+        emptySkyLightMask: this.emptySkyLightMask.toLongArray(),
+        skyLightSections: this.skyLightSections.map(section => section === null ? null : section.toJson()),
+
+        blockLightMask: this.blockLightMask.toLongArray(),
+        emptyBlockLightMask: this.emptyBlockLightMask.toLongArray(),
+        blockLightSections: this.blockLightSections.map(section => section === null ? null : section.toJson())
+      }
+    }
+
+    /**
+     * New light data loading method with consistent interface across versions
+     * Accepts a single argument that contains all necessary light data
+     * @param {Object} lightData - Object containing serialized light data
+     */
+    loadLightNew (lightData) {
+      const { skyLightSections, blockLightSections, skyLightMask, blockLightMask, emptySkyLightMask, emptyBlockLightMask } = lightData
+
+      this.skyLightMask = BitArray.fromLongArray(skyLightMask, 1)
+      this.emptySkyLightMask = BitArray.fromLongArray(emptySkyLightMask, 1)
+      this.skyLightSections = skyLightSections.map(section => section === null ? null : BitArray.fromJson(section))
+
+      this.blockLightMask = BitArray.fromLongArray(blockLightMask, 1)
+      this.emptyBlockLightMask = BitArray.fromLongArray(emptyBlockLightMask, 1)
+      this.blockLightSections = blockLightSections.map(section => section === null ? null : BitArray.fromJson(section))
+    }
   }
 }
 

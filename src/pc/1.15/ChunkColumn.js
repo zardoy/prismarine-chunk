@@ -433,6 +433,37 @@ module.exports = (Block, mcData) => {
 
       return smartBuffer.toBuffer()
     }
+
+    /**
+     * New serializable light data dump method with consistent interface across versions
+     * Returns an object that can be easily transferred between threads
+     * @returns {Object} Object containing serialized light data
+     */
+    dumpLightNew () {
+      return {
+        skyLightSections: this.skyLightSections.map(section => section === null ? null : section.toJson()),
+        blockLightSections: this.blockLightSections.map(section => section === null ? null : section.toJson()),
+        skyLightMask: this.skyLightMask,
+        blockLightMask: this.blockLightMask,
+        emptySkyLightMask: 0, // Not used in 1.15, but included for consistency
+        emptyBlockLightMask: 0 // Not used in 1.15, but included for consistency
+      }
+    }
+
+    /**
+     * New light data loading method with consistent interface across versions
+     * Accepts a single argument that contains all necessary light data
+     * @param {Object} lightData - Object containing serialized light data
+     */
+    loadLightNew (lightData) {
+      const { skyLightSections, blockLightSections, skyLightMask, blockLightMask } = lightData
+
+      this.skyLightMask = skyLightMask
+      this.skyLightSections = skyLightSections.map(section => section === null ? null : BitArray.fromJson(section))
+
+      this.blockLightMask = blockLightMask
+      this.blockLightSections = blockLightSections.map(section => section === null ? null : BitArray.fromJson(section))
+    }
   }
 }
 

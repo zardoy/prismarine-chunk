@@ -166,6 +166,41 @@ module.exports = (Block, mcData) => {
 
     }
 
+    /**
+     * New serializable light data dump method with consistent interface across versions
+     * Returns an object that can be easily transferred between threads
+     * @returns {Object} Object containing serialized light data
+     */
+    dumpLightNew () {
+      return {
+        skyLightSections: this.sections.map(section => section === null ? null : section.skyLight.toJson()),
+        blockLightSections: this.sections.map(section => section === null ? null : section.blockLight.toJson()),
+        skyLightMask: 0, // Not used in 1.9, but included for consistency
+        blockLightMask: 0, // Not used in 1.9, but included for consistency
+        emptySkyLightMask: 0, // Not used in 1.9, but included for consistency
+        emptyBlockLightMask: 0 // Not used in 1.9, but included for consistency
+      }
+    }
+
+    /**
+     * New light data loading method with consistent interface across versions
+     * Accepts a single argument that contains all necessary light data
+     * @param {Object} lightData - Object containing serialized light data
+     */
+    loadLightNew (lightData) {
+      const { skyLightSections, blockLightSections } = lightData
+
+      skyLightSections.forEach((section, i) => {
+        if (this.sections[i] === null) return
+        this.sections[i].skyLight = BitArray.fromJson(section)
+      })
+
+      blockLightSections.forEach((section, i) => {
+        if (this.sections[i] === null) return
+        this.sections[i].blockLight = BitArray.fromJson(section)
+      })
+    }
+
     loadBiomes () {
 
     }
